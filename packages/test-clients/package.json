@@ -1,0 +1,20 @@
+{
+  "name": "@passchart/test-clients",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "patient": "tsx src/patient.ts",
+    "clinician": "tsx src/clinician.ts"
+  },
+  "dependencies": {
+    "@passchart/crypto": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/ws": "^8.5.10",
+    "tsx": "^4.15.6",
+    "typescript": "^5.4.5"
+  }
+}
