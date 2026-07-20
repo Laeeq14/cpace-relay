@@ -137,7 +137,7 @@ cpace-relay/
 │   │
 │   ├── relay/                   ← Local WebSocket relay server
 │   │   ├── src/
-│   │   │   ├── server.ts        ← ws server with assertNoCleartext() PHI guard
+│   │   │   ├── server.ts        ← ws server with assertNoCleartext() cleartext guard
 │   │   │   ├── store.ts         ← In-memory sessions with application-level TTL
 │   │   │   ├── rateLimit.ts     ← 10 attempts / 5 min → permanent session lock
 │   │   │   └── types.ts         ← Wire protocol TypeScript types
@@ -159,22 +159,22 @@ cpace-relay/
 ## Test Results
 
 ```
-@passchart/crypto    10/10 ✅ (legacy handshake tests)
+@cpace-relay/crypto    10/10 ✅ (legacy handshake tests)
   ✓ produces a 32-byte key
   ✓ same PIN produces same key on both sides
   ✓ different PINs produce different keys
   ✓ zero-padded PIN is distinct from unpadded
-  ✓ patient and clinician derive the same shared secret
-  ✓ encrypts and decrypts a synthetic intake message end-to-end
+  ✓ device A and device B derive the same shared secret
+  ✓ encrypts and decrypts a synthetic message end-to-end
   ✓ wrong PIN fails unwrapping (server cannot forge public keys)
   ✓ tampered ciphertext fails authentication
   ✓ WrappedKey contains no raw private key bytes
-  ✓ EncryptedMessage contains no plaintext intake string
+  ✓ EncryptedMessage contains no plaintext data string
 
-@passchart/crypto    10/10 ✅ (CPace PAKE tests)
+@cpace-relay/crypto    10/10 ✅ (CPace PAKE tests)
   ✓ both sides derive the same session key
-  ✓ key confirmation: patient confirms to clinician
-  ✓ key confirmation: clinician confirms to patient
+  ✓ key confirmation: device A confirms to device B
+  ✓ key confirmation: device B confirms to device A
   ✓ full bidirectional key confirmation round-trip passes
   ✓ captured wire messages do not yield a verification oracle for PIN guesses
   ✓ wrong PIN → key confirmation fails
@@ -183,7 +183,7 @@ cpace-relay/
   ✓ confirmation from session A does not verify against session B key
   ✓ each session generates a fresh session key (no determinism across sessions)
 
-@passchart/relay     6/6 ✅
+@cpace-relay/relay     6/6 ✅
   ✓ device A inits session and receives sessionInited ACK
   ✓ device B joins and receives device A wrapped key
   ✓ relay forwards ciphertext from A to B
