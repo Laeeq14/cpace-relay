@@ -1,4 +1,4 @@
-# PassChart
+# cpace-relay
 
 > **Secure, end-to-end encrypted patient intake for independent clinics.**
 >
