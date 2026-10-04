@@ -107,6 +107,8 @@ CPace (IETF draft-irtf-cfrg-cpace) eliminates the oracle by mixing the PIN into 
 
 ## Libraries
 
+### TypeScript packages
+
 | Library | Purpose |
 |---|---|
 | [`tweetnacl`](https://github.com/dchest/tweetnacl-js) | X25519 key exchange, XSalsa20-Poly1305 encryption — audited, no native deps |
@@ -114,7 +116,14 @@ CPace (IETF draft-irtf-cfrg-cpace) eliminates the oracle by mixing the PIN into 
 | `crypto.subtle` (Web Crypto API) | PBKDF2 key derivation — built-in, no extra dependency |
 | [`@noble/curves`](https://github.com/paulmillr/noble-curves) | Ristretto255 hash-to-curve (RFC 9380) for CPace PAKE — audited, pure-JS |
 | [`@noble/hashes`](https://github.com/paulmillr/noble-hashes) | HKDF, HMAC-SHA256 for session key derivation and key confirmation — audited, pure-JS |
-| [`ws`](https://github.com/websockets/ws) | Local WebSocket relay server |
+| [`ws`](https://github.com/websockets/ws) | Local WebSocket relay server (TypeScript reference implementation) |
+
+### Go relay (`packages/relay-go`)
+
+| Library | Purpose |
+|---|---|
+| [`nhooyr.io/websocket`](https://github.com/nhooyr/websocket) | RFC-6455 WebSocket — stdlib-native, no CGo, context-aware reads/writes |
+| [`github.com/google/uuid`](https://github.com/google/uuid) | RFC-4122 socket IDs for connection registry |
 
 ---
 
@@ -123,7 +132,7 @@ CPace (IETF draft-irtf-cfrg-cpace) eliminates the oracle by mixing the PIN into 
 ```
 cpace-relay/
 ├── packages/
-│   ├── crypto/                  ← Shared encryption logic
+│   ├── crypto/                  ← Shared encryption logic (TypeScript)
 │   │   ├── src/
 │   │   │   ├── pin.ts           ← 6-digit PIN generation (crypto.getRandomValues, rejection sampling)
 │   │   │   ├── pinKdf.ts        ← PBKDF2 key derivation (600k iterations, SHA-256)
@@ -135,7 +144,7 @@ cpace-relay/
 │   │       ├── keyExchange.test.ts  ← Legacy round-trip + wire-level plaintext assertions
 │   │       └── cpace.test.ts        ← CPace handshake, offline oracle proof, session isolation
 │   │
-│   ├── relay/                   ← Local WebSocket relay server
+│   ├── relay/                   ← WebSocket relay server (TypeScript reference implementation)
 │   │   ├── src/
 │   │   │   ├── server.ts        ← ws server with assertNoCleartext() cleartext guard
 │   │   │   ├── store.ts         ← In-memory sessions with application-level TTL
@@ -143,6 +152,17 @@ cpace-relay/
 │   │   │   └── types.ts         ← Wire protocol TypeScript types
 │   │   └── tests/integration/
 │   │       └── wire.test.ts     ← Integration tests: handshake, plaintext assertion, rate limit, expiry
+│   │
+│   ├── relay-go/                ← WebSocket relay server (Go — production-grade port)
+│   │   ├── cmd/relay/main.go    ← Entrypoint: PORT env var, SIGINT/SIGTERM shutdown
+│   │   ├── types.go             ← Wire message types (mirrors types.ts)
+│   │   ├── store.go             ← Session store: sync.RWMutex + application-level TTL (mirrors store.ts)
+│   │   ├── ratelimit.go         ← Sliding-window rate limiter (mirrors rateLimit.ts)
+│   │   ├── server.go            ← WebSocket handler + all 4 message routes (mirrors server.ts)
+│   │   ├── server_test.go       ← 8 integration tests (mirrors wire.test.ts)
+│   │   ├── Dockerfile           ← Multi-stage alpine build → ~10 MB image
+│   │   ├── go.mod / go.sum
+│   │   └── README.md
 │   │
 │   └── test-clients/            ← CLI demo clients (synthetic data only)
 │       └── src/
@@ -183,13 +203,23 @@ cpace-relay/
   ✓ confirmation from session A does not verify against session B key
   ✓ each session generates a fresh session key (no determinism across sessions)
 
-@cpace-relay/relay     6/6 ✅
+@cpace-relay/relay     6/6 ✅  (TypeScript reference)
   ✓ device A inits session and receives sessionInited ACK
   ✓ device B joins and receives device A wrapped key
   ✓ relay forwards ciphertext from A to B
   ✓ store contains no forbidden plaintext after a full session
   ✓ 11th joinSession attempt is rate-limited/locked
   ✓ expired session is blocked (application-level TTL check)
+
+relay-go               8/8 ✅  (Go port — 0.5 s)
+  ✓ patient inits session and receives sessionInited ACK
+  ✓ clinician joins and receives patient wrapped key
+  ✓ full handshake: relay forwards ciphertext from patient to clinician
+  ✓ store snapshot contains no forbidden plaintext PHI
+  ✓ 11th joinSession attempt is rate-limited/locked
+  ✓ join on non-existent session → SESSION_NOT_FOUND
+  ✓ join on backdated session → SESSION_EXPIRED
+  ✓ plaintext PHI in cipher field is rejected before reaching the store
 ```
 
 ---
@@ -214,8 +244,8 @@ cpace-relay/
 
 ### Prerequisites
 
-- Node.js ≥ 18
-- npm ≥ 8
+- Node.js ≥ 18, npm ≥ 8 (TypeScript packages)
+- Go ≥ 1.22 (Go relay)
 
 ### Setup
 
@@ -232,17 +262,25 @@ npm run build --workspace=packages/crypto
 # Crypto unit tests (20 tests)
 npm test --workspace=packages/crypto
 
-# Relay integration tests (6 tests)
+# TypeScript relay integration tests (6 tests)
 npm test --workspace=packages/relay -- --forceExit
+
+# Go relay integration tests (8 tests)
+cd packages/relay-go && go test ./... -v
 ```
 
 ### Manual End-to-End Demo (synthetic data only)
 
-Open three terminals from the project root:
+Open three terminals from the project root.
 
-**Terminal 1 — relay server:**
+**Terminal 1 — relay server (pick one):**
 ```bash
+# TypeScript reference relay
 npm run dev --workspace=packages/relay
+
+# — OR — Go relay (wire-compatible, no Node runtime needed)
+cd packages/relay-go && go run ./cmd/relay
+# Set a custom port: PORT=9090 go run ./cmd/relay
 ```
 
 **Terminal 2 — device A (patient side):**
@@ -259,6 +297,14 @@ npm run clinician --workspace=packages/test-clients
 ```
 
 The relay terminal shows only base64-encoded ciphertext — no plaintext transits the server.
+
+### Go relay — Docker
+
+```bash
+cd packages/relay-go
+docker build -t cpace-relay-go .
+docker run -p 8080:8080 cpace-relay-go
+```
 
 ---
 
